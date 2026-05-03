@@ -215,20 +215,18 @@ class GitCollector:
         if author:
             kwargs["author"] = author
 
-        # 分支策略
+        # 分支策略 — rev 作为第一个位置参数传入
         strategy = self.git_config.branch_strategy
         if strategy == "current":
-            kwargs["rev"] = "HEAD"
-        elif strategy == "merged":
-            kwargs["rev"] = branch
+            rev = "HEAD"
         elif strategy == "all":
-            kwargs["rev"] = "--all"
-        else:
-            kwargs["rev"] = branch
+            rev = "--all"
+        else:  # merged / default
+            rev = branch
 
         commits = []
         try:
-            for c in repo.iter_commits(**kwargs):
+            for c in repo.iter_commits(rev, **kwargs):
                 local_date = c.committed_datetime.astimezone(self.tz)
                 commits.append(GitCommit(
                     hash=c.hexsha[:8],
