@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weekly-report-agent"
+version = "0.1.0"
+description = "自动采集 Git 提交 + 用户文档，基于 LLM 生成结构化工作周报的 CLI Agent"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "openai>=1.0",
+    "gitpython>=3.1",
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "python-docx>=1.0",
+]
+
+[project.optional-dependencies]
+rag = [
+    "faiss-cpu>=1.7",
+    "sentence-transformers>=2.2",
+]
+pdf = [
+    "pymupdf>=1.23",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
+all = [
+    "weekly-report-agent[rag,pdf,dev]",
+]
+
+[project.scripts]
+wkr = "src.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

@@ -1,0 +1,313 @@
+"""
+CLI 入口（Click）
+
+命令：
+  wkr init      初始化配置向导
+  wkr log       记录今日工作
+  wkr report    生成周报
+  wkr show      查看日志
+"""
+
+from __future__ import annotations
+
+import sys
+from datetime import date, timedelta
+from pathlib import Path
+
+import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from src.config import load_config, find_config, AppConfig
+
+console = Console()
+
+
+def _get_project_root() -> Path:
+    """查找项目根目录（含 config.yaml）"""
+    try:
+        return find_config().parent
+    except FileNotFoundError:
+        console.print("[red]❌ 未找到 config.yaml，请先运行 wkr init[/red]")
+        sys.exit(1)
+
+
+def _load_cfg() -> AppConfig:
+    """加载配置"""
+    config_path = find_config()
+    return load_config(config_path)
+
+
+def _get_week_start(d: date = None) -> date:
+    """获取指定日期所在周的周一"""
+    d = d or date.today()
+    return d - timedelta(days=d.weekday())
+
+
+# ── 主命令 ────────────────────────────────────────────────
+
+@click.group()
+@click.version_option(version="0.1.0")
+def main():
+    """wkr — 周报自动生成 Agent"""
+    pass
+
+
+# ── wkr init ─────────────────────────────────────────────
+
+@main.command()
+def init():
+    """初始化配置向导"""
+    console.print(Panel("🔧 周报 Agent 初始化向导", style="bold blue"))
+
+    name = click.prompt("项目名称", default="MyProject")
+    repo_path = click.prompt("Git 仓库路径", default=".")
+    author = click.prompt("你的 Git 用户名", default="", show_default=False)
+    if not author:
+        import git
+        try:
+            author = git.Repo(repo_path).config_reader().get_value("user", "name", "")
+        except Exception:
+            author = "Unknown"
+
+    template = click.prompt("周报模板", default="standard",
+                            type=click.Choice(["standard", "minimal", "project"]))
+
+    provider = click.prompt("LLM 提供商", default="1",
+                            type=click.Choice(["1", "2", "3"]))
+    provider_map = {"1": "openai", "2": "dashscope", "3": "ollama"}
+    provider_name = provider_map[provider]
+
+    if provider_name in ("openai", "dashscope"):
+        console.print("\n[yellow]⚠️ 提醒：使用云端 LLM 时，您的工作日志数据将被传输至第三方服务器。[/yellow]")
+        console.print("[yellow]   对于敏感项目，建议选择本地 Ollama。[/yellow]\n")
+
+    model = click.prompt("模型名称",
+                         default="gpt-4o-mini" if provider_name == "openai" else "qwen2.5:7b")
+    security = click.prompt("安全等级", default="balanced",
+                            type=click.Choice(["strict", "balanced", "full"]))
+
+    # 写入 config.yaml
+    import yaml
+    config_data = {
+        "project": {"name": name, "author": author},
+        "repositories": [{"path": repo_path, "branch": "main", "alias": ""}],
+        "git": {"timezone": "Asia/Shanghai", "branch_strategy": "merged", "no_merges": True},
+        "security": {
+            "level": security,
+            "filter_keywords": ["password", "secret", "token", "api_key", "credential"],
+            "max_diff_chars": 500,
+        },
+        "llm": {"provider": provider_name, "model": model, "api_key": "", "base_url": None, "temperature": 0.3},
+        "rag": {"embedding_model": "shibing624/text2vec-base-chinese", "chunk_size": 300, "chunk_overlap": 50, "top_k": 5, "incremental": True},
+        "report": {"template": template, "output_dir": "./reports", "format": "markdown", "auto_open": True},
+        "schedule": {"cron": "0 17 * * 5", "notify": {"enabled": False, "webhook": ""}},
+        "ingest": {"watch_dirs": [], "supported_formats": [".md", ".txt", ".docx"]},
+    }
+
+    config_path = Path("config.yaml")
+    with open(config_path, "w", encoding="utf-8") as f:
+        yaml.dump(config_data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+    console.print(f"[green]✓ 配置已保存至 {config_path}[/green]")
+    console.print(f"[dim]请设置环境变量: export OPENAI_API_KEY=your_key[/dim]")
+
+
+# ── wkr log ──────────────────────────────────────────────
+
+@main.command()
+@click.option("--from-git", is_flag=True, help="从 Git 采集今日提交")
+@click.option("--manual", is_flag=True, help="手动输入工作日志")
+@click.option("--file", "filepath", type=click.Path(), help="从文件导入日志")
+@click.option("--date", "target_date", type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="指定日期（默认今天）")
+def log(from_git, manual, filepath, target_date):
+    """记录今日工作"""
+    cfg = _load_cfg()
+    d = (target_date.date() if target_date else date.today())
+
+    if from_git:
+        from src.collectors.git_collector import GitCollector
+        from src.storage.cache_store import GitStatsCache
+        from src.storage.log_store import LogStore
+
+        log_store = LogStore(cfg.data_dir)
+        cache = GitStatsCache(Path(cfg.data_dir) / "cache" / "git_stats.db")
+        collector = GitCollector(cfg.git, cfg.security, cache)
+
+        days = collector.collect_all_repos(cfg.repositories, since=d, until=d,
+                                           global_author=cfg.project.author)
+        if not days:
+            console.print("[yellow]今日无 Git 提交[/yellow]")
+            return
+
+        for day in days:
+            log_store.save_git_day(day, cfg.security.level)
+            console.print(f"[green]✓ 已采集 {day.date} Git 提交 {len(day.commits)} 条（{day.repo_alias}）[/green]")
+            for c in day.commits:
+                prefix = "[低信息量] " if c.is_low_quality else ""
+                console.print(f"  - {c.hash} {prefix}{c.message.split(chr(10))[0][:60]}")
+
+        # 询问是否补充
+        if click.confirm("是否补充说明？", default=False):
+            extra = click.prompt("> ", prompt_suffix="")
+            log_store.save_manual(d, extra)
+            console.print("[green]✓ 已保存补充说明[/green]")
+
+    elif manual:
+        from src.storage.log_store import LogStore
+        from src.collectors.manual_collector import ManualCollector
+
+        log_store = LogStore(cfg.data_dir)
+        mc = ManualCollector(log_store)
+        mc.collect_interactive(d)
+
+    elif filepath:
+        from src.storage.log_store import LogStore
+        from src.collectors.manual_collector import ManualCollector
+
+        log_store = LogStore(cfg.data_dir)
+        mc = ManualCollector(log_store)
+        mc.collect_from_file(filepath, d)
+
+    else:
+        console.print("[yellow]请指定采集方式: --from-git / --manual / --file[/yellow]")
+        console.print("[dim]示例: wkr log --from-git[/dim]")
+
+
+# ── wkr report ───────────────────────────────────────────
+
+@main.command()
+@click.option("--week", type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="指定周的日期（自动找到该周周一）")
+@click.option("--template", "template_name", default=None, help="指定模板")
+@click.option("--dry-run", is_flag=True, help="输出原始 JSON，不渲染模板")
+@click.option("--dump-context", is_flag=True, help="输出预处理上下文（离线调试）")
+def report(week, template_name, dry_run, dump_context):
+    """生成周报"""
+    cfg = _load_cfg()
+    week_start = _get_week_start(week.date() if week else None)
+    template_name = template_name or cfg.report.template
+
+    # 初始化组件
+    from src.storage.log_store import LogStore
+    from src.storage.cache_store import GitStatsCache
+    from src.collectors.git_collector import GitCollector
+    from src.preprocessor.context_builder import ContextBuilder
+
+    log_store = LogStore(cfg.data_dir)
+    cache = GitStatsCache(Path(cfg.data_dir) / "cache" / "git_stats.db")
+    git_collector = GitCollector(cfg.git, cfg.security, cache)
+    ctx_builder = ContextBuilder(cfg, log_store, git_collector)
+
+    # --dump-context：离线调试模式
+    if dump_context:
+        console.print("[bold]📊 数据预处理...[/bold]")
+        debug = ctx_builder.build_debug(week_start)
+        console.print(debug)
+        return
+
+    # 数据预处理
+    console.print("[bold]📊 数据预处理...[/bold]")
+    mode = "fallback"  # Phase 1 简化，后续由 agent 自动检测
+    context, week_days, week_stats = ctx_builder.build(week_start, mode=mode)
+    console.print(f"  ── Git 统计：{week_stats['git_commits']} commits, "
+                  f"+{week_stats['insertions']}/-{week_stats['deletions']}")
+
+    # LLM 提取
+    console.print("[bold]🤖 Agent 提取结构化数据...[/bold]")
+    from src.agent.react_agent import ReportAgent
+    from src.agent.tools import ToolExecutor
+    from src.agent.schema import validate_and_raise
+
+    tool_executor = ToolExecutor(
+        week_days=week_days,
+        week_stats=week_stats,
+        day_contents={d.isoformat(): log_store.get_day_content(d)
+                      for d in log_store.get_week_dates(week_start)},
+        security_level=cfg.security.level,
+    )
+
+    agent = ReportAgent(cfg.llm)
+    console.print(f"  ── 模式: {agent.mode}")
+
+    # 带重试的生成 + 校验
+    max_retries = 3
+    report_data = None
+    for attempt in range(max_retries):
+        try:
+            report_data = agent.generate(context, tool_executor)
+            validate_and_raise(report_data)
+            console.print("  ── JSON Schema 校验通过 ✓")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                console.print(f"[yellow]  ⚠️ 第 {attempt + 1} 次失败: {str(e)[:80]}[/yellow]")
+                console.print(f"[yellow]  正在重试...[/yellow]")
+            else:
+                console.print(f"[red]❌ 重试 {max_retries} 次后仍失败: {e}[/red]")
+                sys.exit(1)
+
+    # --dry-run：输出 JSON
+    if dry_run:
+        import json
+        console.print(json.dumps(report_data, ensure_ascii=False, indent=2))
+        return
+
+    # 模板渲染
+    console.print(f"[bold]📝 模板渲染...[/bold]")
+    from src.generator.template_engine import TemplateEngine, build_config_defaults
+
+    template_engine = TemplateEngine(Path(cfg.config_dir) / "templates")
+    defaults = build_config_defaults(cfg, week_start)
+    rendered = template_engine.render(template_name, report_data, defaults)
+    console.print(f"  ── 使用模板: {template_name}.md.j2")
+
+    # 导出
+    from src.generator.exporter import Exporter
+    exporter = Exporter(cfg.report.output_dir)
+    week_end = week_start + timedelta(days=6)
+
+    if cfg.report.format == "docx":
+        filepath = exporter.export_docx(rendered, week_start, week_end)
+    else:
+        filepath = exporter.export_markdown(rendered, week_start, week_end)
+
+    console.print(f"[green]✓ 周报已生成: {filepath}[/green]")
+
+    # 自动打开
+    if cfg.report.auto_open and click.confirm("打开预览？", default=True):
+        click.launch(str(filepath), locate=True)
+
+
+# ── wkr show ─────────────────────────────────────────────
+
+@main.command()
+@click.option("--date", "target_date", type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="指定日期")
+@click.option("--week", is_flag=True, help="显示本周汇总")
+def show(target_date, week):
+    """查看日志"""
+    cfg = _load_cfg()
+    from src.storage.log_store import LogStore
+    log_store = LogStore(cfg.data_dir)
+
+    if week:
+        week_start = _get_week_start()
+        content = log_store.get_week_content(week_start)
+        if content:
+            console.print(Panel(content, title="本周日志", border_style="blue"))
+        else:
+            console.print("[yellow]本周暂无日志[/yellow]")
+    else:
+        d = target_date.date() if target_date else date.today()
+        content = log_store.get_day_content(d)
+        if content:
+            console.print(Panel(content, title=f"{d.isoformat()} 日志", border_style="blue"))
+        else:
+            console.print(f"[yellow]{d.isoformat()} 暂无日志[/yellow]")
+
+
+if __name__ == "__main__":
+    main()

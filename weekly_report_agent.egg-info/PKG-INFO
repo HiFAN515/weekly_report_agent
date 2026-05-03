@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: weekly-report-agent
+Version: 0.1.0
+Summary: 自动采集 Git 提交 + 用户文档，基于 LLM 生成结构化工作周报的 CLI Agent
+Requires-Python: >=3.10
+Requires-Dist: click>=8.0
+Requires-Dist: openai>=1.0
+Requires-Dist: gitpython>=3.1
+Requires-Dist: jinja2>=3.1
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: pydantic>=2.0
+Requires-Dist: rich>=13.0
+Requires-Dist: python-docx>=1.0
+Provides-Extra: rag
+Requires-Dist: faiss-cpu>=1.7; extra == "rag"
+Requires-Dist: sentence-transformers>=2.2; extra == "rag"
+Provides-Extra: pdf
+Requires-Dist: pymupdf>=1.23; extra == "pdf"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Provides-Extra: all
+Requires-Dist: weekly-report-agent[dev,pdf,rag]; extra == "all"

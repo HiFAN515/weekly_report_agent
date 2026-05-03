@@ -1,0 +1,38 @@
+# 周报 — {{ year }}年第{{ week_num }}周
+> {{ date_range }} | {{ author }}
+
+## 一、本周工作总结
+
+### 核心成果
+{% for item in highlights %}
+- {{ item }}
+{% endfor %}
+
+### 详细工作
+{% for day in daily_work %}
+**{{ day.weekday }} ({{ day.date }})**
+{% for task in day.tasks %}
+- {{ task }}
+{% endfor %}
+{% endfor %}
+
+## 二、问题与风险
+| 问题 | 影响 | 解决方案 | 状态 |
+|------|------|----------|------|
+{% for issue in issues %}
+| {{ issue.description }} | {{ issue.impact | default("—") }} | {{ issue.solution | default("—") }} | {{ issue.status }} |
+{% endfor %}
+
+## 三、下周计划
+{% for plan in next_week %}
+- [ ] {{ plan }}
+{% endfor %}
+
+## 四、数据摘要
+- Git 提交：{{ data_summary.git_commits }} 次
+- 涉及文件：{{ data_summary.files_changed }} 个
+- 代码变更：+{{ data_summary.insertions }} / -{{ data_summary.deletions }}
+- 记录天数：{{ data_summary.log_days }} 天
+{% if data_summary.repos_touched %}
+- 涉及仓库：{{ data_summary.repos_touched | join(", ") }}
+{% endif %}
