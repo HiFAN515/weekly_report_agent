@@ -75,16 +75,18 @@ def init():
                             type=click.Choice(["standard", "minimal", "project"]))
 
     provider = click.prompt("LLM 提供商", default="1",
-                            type=click.Choice(["1", "2", "3"]))
-    provider_map = {"1": "openai", "2": "dashscope", "3": "ollama"}
+                            type=click.Choice(["1", "2", "3", "4"]))
+    provider_map = {"1": "openai", "2": "anthropic", "3": "dashscope", "4": "ollama"}
     provider_name = provider_map[provider]
 
-    if provider_name in ("openai", "dashscope"):
+    if provider_name in ("openai", "anthropic", "dashscope"):
         console.print("\n[yellow]⚠️ 提醒：使用云端 LLM 时，您的工作日志数据将被传输至第三方服务器。[/yellow]")
         console.print("[yellow]   对于敏感项目，建议选择本地 Ollama。[/yellow]\n")
 
     model = click.prompt("模型名称",
-                         default="gpt-4o-mini" if provider_name == "openai" else "qwen2.5:7b")
+                         default="claude-sonnet-4-20250514" if provider_name == "anthropic"
+                         else "gpt-4o-mini" if provider_name == "openai"
+                         else "qwen2.5:7b")
     security = click.prompt("安全等级", default="balanced",
                             type=click.Choice(["strict", "balanced", "full"]))
 
@@ -219,7 +221,7 @@ def report(week, template_name, dry_run, dump_context):
     console.print("[bold]🤖 Agent 提取结构化数据...[/bold]")
     from src.agent.react_agent import ReportAgent
     from src.agent.tools import ToolExecutor
-    from src.agent.schema import validate_and_raise
+    from src.agent.schema import ReportSchemaValidator
 
     tool_executor = ToolExecutor(
         week_days=week_days,
@@ -232,14 +234,29 @@ def report(week, template_name, dry_run, dump_context):
     agent = ReportAgent(cfg.llm)
     console.print(f"  ── 模式: {agent.mode}")
 
-    # 带重试的生成 + 校验
+    validator = ReportSchemaValidator(Path(cfg.config_dir) / "templates")
+
+    # 带重试的生成 + 两级校验
     max_retries = 3
     report_data = None
     for attempt in range(max_retries):
         try:
             report_data = agent.generate(context, tool_executor)
-            validate_and_raise(report_data)
-            console.print("  ── JSON Schema 校验通过 ✓")
+
+            # 第 1 级：全局 JSON Schema 校验
+            valid, errors = validator.validate(report_data)
+            if not valid:
+                raise Exception(f"全局 Schema 校验失败: {errors}")
+            console.print("  ── 全局 Schema 校验通过 ✓")
+
+            # 第 2 级：模板 Schema 二次校验
+            valid, errors = validator.validate_template(report_data, template_name)
+            if not valid:
+                raise Exception(f"模板校验失败: {errors}")
+            console.print("  ── 模板 Schema 校验通过 ✓")
+
+            # 填充默认值
+            report_data = validator.fill_defaults(report_data, template_name)
             break
         except Exception as e:
             if attempt < max_retries - 1:
