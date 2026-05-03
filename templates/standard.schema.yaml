@@ -1,0 +1,70 @@
+# 标准研发周报 — 模板二次校验 Schema
+# 全局 JSON Schema 已覆盖大部分类型约束
+# 此文件补充模板特有的约束和默认值
+
+variables:
+  highlights:
+    type: list
+    items: string
+    min: 1
+    max: 7
+    required: true
+
+  daily_work:
+    type: list
+    items:
+      type: object
+      properties:
+        date: { type: string }
+        weekday: { type: string, enum: [周一, 周二, 周三, 周四, 周五, 周六, 周日] }
+        tasks: { type: list, items: string }
+    required: true
+
+  issues:
+    type: list
+    items:
+      type: object
+      properties:
+        description: { type: string }
+        impact: { type: string, default: "—" }
+        solution: { type: string, default: "—" }
+        status: { type: string, enum: [已解决, 处理中, 待解决, 已搁置] }
+    required: true
+
+  next_week:
+    type: list
+    items: string
+    required: true
+
+  data_summary:
+    type: object
+    properties:
+      git_commits: { type: integer }
+      files_changed: { type: integer }
+      insertions: { type: integer }
+      deletions: { type: integer }
+      log_days: { type: integer }
+    required: true
+
+  # 以下变量由程序层自动填充，不依赖 LLM 输出
+  author:
+    type: string
+    source: config
+    default: "Unknown"
+
+  year:
+    type: integer
+    source: computed
+
+  week_num:
+    type: integer
+    source: computed
+
+  date_range:
+    type: string
+    source: computed
+
+  project_name:
+    type: string
+    source: config
+    default: "MyProject"
