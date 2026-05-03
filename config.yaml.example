@@ -1,0 +1,68 @@
+# 周报 Agent 配置文件
+# 运行 wkr init 自动生成，也可手动编辑
+
+# ── 项目配置 ──────────────────────────────────────────────
+project:
+  name: "MyProject"
+  author: ""                    # 留空则自动使用 git config user.name
+
+# ── Git 仓库 ─────────────────────────────────────────────
+repositories:
+  - path: .                     # 仓库路径（支持 ~ 展开）
+    branch: main                # 默认分支
+    alias: ""                   # 仓库别名（空则用目录名）
+    # author: ""                # 可选，覆盖全局 author
+
+git:
+  timezone: "Asia/Shanghai"     # 采集时使用的时区
+  branch_strategy: "merged"     # merged | all | current
+  no_merges: true               # 过滤 merge commit
+
+# ── 安全配置 ─────────────────────────────────────────────
+security:
+  level: "balanced"             # strict | balanced | full
+  filter_keywords:              # 包含这些词的 commit 不传给 LLM
+    - password
+    - secret
+    - token
+    - api_key
+    - credential
+  max_diff_chars: 500           # full 模式下 diff 最大字符数
+
+# ── LLM 配置 ─────────────────────────────────────────────
+llm:
+  provider: "anthropic"            # openai | anthropic | dashscope | ollama
+  model: "MiniMax-M2.7"          # anthropic: claude-sonnet-4-20250514, ollama: qwen2.5:7b
+  api_key: "${ANTHROPIC_API_KEY}"  # 支持 ${ENV_VAR} 替换，Anthropic 用 ${ANTHROPIC_API_KEY}
+  base_url: https://api.minimaxi.com/anthropic             # 自定义 API 地址（Ollama: http://localhost:11434/v1）
+  temperature: 0.3
+
+# ── RAG 配置 ─────────────────────────────────────────────
+rag:
+  embedding_model: "shibing624/text2vec-base-chinese"
+  chunk_size: 300
+  chunk_overlap: 50
+  top_k: 5
+  incremental: true
+
+# ── 周报配置 ─────────────────────────────────────────────
+report:
+  template: "standard"          # 模板名（对应 templates/{name}.md.j2）
+  output_dir: "./reports"
+  format: "markdown"            # markdown | docx | html
+  auto_open: true
+
+# ── 定时调度 ─────────────────────────────────────────────
+schedule:
+  cron: "0 17 * * 5"            # 每周五 17:00
+  notify:
+    enabled: false
+    webhook: ""                 # 钉钉/飞书 Webhook
+
+# ── 文档摄入 ─────────────────────────────────────────────
+ingest:
+  watch_dirs: []
+  supported_formats:
+    - ".md"
+    - ".txt"
+    - ".docx"
