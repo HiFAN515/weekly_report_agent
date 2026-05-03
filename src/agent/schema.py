@@ -190,3 +190,153 @@ def validate_and_raise(data: dict[str, Any]):
     valid, errors = validate_report(data)
     if not valid:
         raise ValidationError(errors)
+
+
+# ── 模板 Schema 二次校验 ─────────────────────────────────
+
+import yaml
+from pathlib import Path
+
+
+def validate_template(data: dict[str, Any], template_name: str,
+                      templates_dir: str | Path = "templates") -> tuple[bool, list[str]]:
+    """
+    第 2 级：模板 Schema 二次校验
+
+    检查模板特有的约束（子结构完整性、枚举值、类型）
+    并自动填充默认值
+
+    Returns:
+        (是否通过, 错误列表)
+    """
+    schema_path = Path(templates_dir) / f"{template_name}.schema.yaml"
+    if not schema_path.exists():
+        return True, []  # 无模板 Schema，跳过
+
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema = yaml.safe_load(f) or {}
+
+    variables = schema.get("variables", {})
+    errors = []
+
+    for var_name, var_def in variables.items():
+        if not isinstance(var_def, dict):
+            continue
+        if var_def.get("source") in ("config", "computed"):
+            continue  # 程序填充的字段，跳过校验
+
+        if var_name not in data:
+            if var_def.get("required"):
+                errors.append(f"模板变量 {var_name}: 缺失（模板要求必填）")
+            continue
+
+        val = data[var_name]
+        expected_type = var_def.get("type")
+
+        # 类型检查
+        if expected_type == "list" and not isinstance(val, list):
+            errors.append(f"{var_name}: 期望 list，收到 {type(val).__name__}")
+            continue
+        elif expected_type == "object" and not isinstance(val, dict):
+            errors.append(f"{var_name}: 期望 object，收到 {type(val).__name__}")
+            continue
+        elif expected_type == "string" and not isinstance(val, str):
+            errors.append(f"{var_name}: 期望 string，收到 {type(val).__name__}")
+            continue
+        elif expected_type == "integer" and not isinstance(val, int):
+            errors.append(f"{var_name}: 期望 integer，收到 {type(val).__name__}")
+            continue
+
+        # 枚举检查
+        if isinstance(val, str) and "enum" in var_def:
+            if val not in var_def["enum"]:
+                errors.append(f'{var_name}: 值 "{val}" 不在 {var_def["enum"]} 中')
+
+        # list 元素的枚举检查（如 issues[].status）
+        if isinstance(val, list) and "items" in var_def:
+            item_def = var_def["items"]
+            if isinstance(item_def, dict) and "properties" in item_def:
+                for i, item in enumerate(val):
+                    if not isinstance(item, dict):
+                        continue
+                    for prop_name, prop_def in item_def["properties"].items():
+                        if not isinstance(prop_def, dict):
+                            continue
+                        if prop_name in item and "enum" in prop_def:
+                            if item[prop_name] not in prop_def["enum"]:
+                                errors.append(
+                                    f'{var_name}[{i}].{prop_name}: '
+                                    f'值 "{item[prop_name]}" 不在 {prop_def["enum"]} 中'
+                                )
+
+        # list 长度检查
+        if isinstance(val, list):
+            if "min" in var_def and len(val) < var_def["min"]:
+                errors.append(f"{var_name}: 至少需要 {var_def['min']} 条，收到 {len(val)} 条")
+            if "max" in var_def and len(val) > var_def["max"]:
+                errors.append(f"{var_name}: 最多 {var_def['max']} 条，收到 {len(val)} 条")
+
+    return len(errors) == 0, errors
+
+
+# ── 两级校验 + 自动重试 ──────────────────────────────────
+
+class ReportSchemaValidator:
+    """两级 Schema 校验器"""
+
+    def __init__(self, templates_dir: str | Path = "templates"):
+        self.templates_dir = templates_dir
+
+    def validate(self, data: dict[str, Any]) -> tuple[bool, list[str]]:
+        """第 1 级：全局 JSON Schema 校验"""
+        return validate_report(data)
+
+    def validate_template(self, data: dict[str, Any],
+                          template_name: str) -> tuple[bool, list[str]]:
+        """第 2 级：模板 Schema 二次校验"""
+        return validate_template(data, template_name, self.templates_dir)
+
+    def validate_all(self, data: dict[str, Any],
+                     template_name: str) -> tuple[bool, list[str]]:
+        """两级校验，合并错误"""
+        all_errors = []
+
+        valid, errors = self.validate(data)
+        if not valid:
+            all_errors.extend(errors)
+
+        valid, errors = self.validate_template(data, template_name)
+        if not valid:
+            all_errors.extend(errors)
+
+        return len(all_errors) == 0, all_errors
+
+    def fill_defaults(self, data: dict[str, Any],
+                      template_name: str) -> dict[str, Any]:
+        """用模板 Schema 中的默认值填充缺失字段"""
+        schema_path = Path(self.templates_dir) / f"{template_name}.schema.yaml"
+        if not schema_path.exists():
+            return data
+
+        with open(schema_path, "r", encoding="utf-8") as f:
+            schema = yaml.safe_load(f) or {}
+
+        for var_name, var_def in schema.get("variables", {}).items():
+            if not isinstance(var_def, dict):
+                continue
+            if "default" not in var_def:
+                continue
+            if var_name not in data:
+                data[var_name] = var_def["default"]
+            elif isinstance(data[var_name], list):
+                # 填充列表元素的默认值
+                item_def = var_def.get("items", {})
+                if isinstance(item_def, dict) and "properties" in item_def:
+                    for item in data[var_name]:
+                        if isinstance(item, dict):
+                            for prop, prop_def in item_def["properties"].items():
+                                if isinstance(prop_def, dict) and "default" in prop_def:
+                                    if prop not in item or not item[prop]:
+                                        item[prop] = prop_def["default"]
+
+        return data
