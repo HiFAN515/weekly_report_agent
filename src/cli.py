@@ -47,7 +47,40 @@ def _get_week_start(d: date = None) -> date:
 
 # ── 主命令 ────────────────────────────────────────────────
 
-@click.group()
+HELP_EPILOG = """快速参考
+
+  wkr init                            初始化配置向导
+
+  wkr log --from-git                  从 Git 采集今日提交
+  wkr log --manual                    手动输入工作日志
+  wkr log --file PATH                 从文件导入日志
+  wkr log --date YYYY-MM-DD           指定日期（默认今天）
+
+  wkr report                          生成本周周报
+  wkr report --week YYYY-MM-DD        指定周
+  wkr report --template NAME          指定模板
+  wkr report --dry-run                输出 JSON 不渲染
+  wkr report --dump-context           离线调试（不调用 LLM）
+
+  wkr show                            查看今日日志
+  wkr show --date YYYY-MM-DD          指定日期
+  wkr show --week                     本周汇总
+
+各命令详细选项请运行: wkr <command> --help
+"""
+
+
+class WkrGroup(click.Group):
+    """自定义 Group，保留 epilog 原始换行格式"""
+    def format_epilog(self, ctx, formatter):
+        if self.epilog:
+            formatter.write_paragraph()
+            with formatter.indentation():
+                for line in self.epilog.split("\n"):
+                    formatter.write_text(line)
+
+
+@click.group(cls=WkrGroup, epilog=HELP_EPILOG)
 @click.version_option(version="0.1.0")
 def main():
     """wkr — 周报自动生成 Agent"""
