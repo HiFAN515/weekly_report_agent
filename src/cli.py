@@ -300,12 +300,15 @@ def report(week, template_name, dry_run, dump_context, export_format):
 
     # 初始化 VectorStore（如果 RAG 依赖可用）
     vector_store = None
-    try:
-        from src.storage.vector_store import VectorStore, EmbeddingModel
-        embedding_model = EmbeddingModel(cfg.rag.embedding_model)
-        vector_store = VectorStore(Path(cfg.data_dir) / "index", embedding_model)
-    except ImportError:
-        console.print("[dim]⚠️ RAG 依赖未安装，跳过语义检索（pip install faiss-cpu sentence-transformers）[/dim]")
+    if cfg.rag.incremental:
+        try:
+            from src.storage.vector_store import VectorStore, EmbeddingModel
+            embedding_model = EmbeddingModel(cfg.rag.embedding_model)
+            vector_store = VectorStore(Path(cfg.data_dir) / "index", embedding_model)
+        except ImportError:
+            console.print("[dim]⚠️ RAG 依赖未安装，跳过语义检索（pip install faiss-cpu sentence-transformers）[/dim]")
+        except Exception as e:
+            console.print(f"[dim]⚠️ RAG 初始化失败，跳过语义检索: {e}[/dim]")
 
     ctx_builder = ContextBuilder(cfg, log_store, git_collector, vector_store)
 
