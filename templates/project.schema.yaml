@@ -1,0 +1,50 @@
+variables:
+  highlights:
+    type: list
+    items: string
+    min: 1
+    max: 7
+    required: true
+  daily_work:
+    type: list
+    items:
+      type: object
+      properties:
+        date: { type: string }
+        weekday: { type: string }
+        tasks: { type: list, items: string }
+    required: true
+  issues:
+    type: list
+    items:
+      type: object
+      properties:
+        description: { type: string }
+        impact: { type: string, default: "—" }
+        solution: { type: string, default: "—" }
+        status: { type: string, enum: [已解决, 处理中, 待解决, 已搁置] }
+    required: false
+  next_week:
+    type: list
+    items: string
+    required: true
+  data_summary:
+    type: object
+    required: true
+  author:
+    type: string
+    source: config
+    default: "Unknown"
+  year:
+    type: integer
+    source: computed
+  week_num:
+    type: integer
+    source: computed
+  date_range:
+    type: string
+    source: computed
+  project_name:
+    type: string
+    source: config
+    default: "MyProject"

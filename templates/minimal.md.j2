@@ -1,0 +1,27 @@
+# {{ project_name }} W{{ week_num }}
+
+{% for item in highlights %}
+- {{ item }}
+{% endfor %}
+
+{% for day in daily_work %}
+**{{ day.weekday }} {{ day.date }}**
+{% for task in day.tasks %}
+- {{ task }}
+{% endfor %}
+
+{% endfor %}
+{% if issues %}
+## 问题
+{% for issue in issues %}
+- {{ issue.description }} → {{ issue.status }}
+{% endfor %}
+{% endif %}
+
+## 下周
+{% for plan in next_week %}
+- {{ plan }}
+{% endfor %}
+
+---
+> {{ author }} | {{ date_range }} | {{ data_summary.git_commits }} commits

@@ -1,0 +1,44 @@
+# {{ project_name }} 周报 — W{{ week_num }}
+> {{ date_range }} | {{ author }}
+
+## 进度概览
+
+| 模块 | 计划 | 完成 | 备注 |
+|------|------|------|------|
+{% for day in daily_work %}
+{% for task in day.tasks %}
+| {{ task[:40] }} | ✅ | {{ day.date }} | |
+{% endfor %}
+{% endfor %}
+
+## 核心成果
+{% for item in highlights %}
+- {{ item }}
+{% endfor %}
+
+## 里程碑
+{% for day in daily_work %}
+**{{ day.weekday }} {{ day.date }}**
+{% for task in day.tasks %}
+- {{ task }}
+{% endfor %}
+{% endfor %}
+
+## 风险与依赖
+{% if issues %}
+{% for issue in issues %}
+- ⚠️ **{{ issue.description }}** — {{ issue.status }}
+{% if issue.impact %}  影响: {{ issue.impact }}{% endif %}
+{% if issue.solution %}  方案: {{ issue.solution }}{% endif %}
+{% endfor %}
+{% else %}
+本周无遗留问题 ✅
+{% endif %}
+
+## 下周计划
+{% for plan in next_week %}
+- [ ] {{ plan }}
+{% endfor %}
+
+---
+> Git {{ data_summary.git_commits }} commits | +{{ data_summary.insertions }} / -{{ data_summary.deletions }} | {{ data_summary.files_changed }} files | {{ data_summary.log_days }} days
