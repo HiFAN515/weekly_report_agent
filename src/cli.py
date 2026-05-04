@@ -66,6 +66,12 @@ HELP_EPILOG = """快速参考
   wkr show --date YYYY-MM-DD          指定日期
   wkr show --week                     本周汇总
 
+  wkr search "关键词"                  语义搜索历史日志
+  wkr search "关键词" --top-k 10      指定返回数量
+
+  wkr ingest --dir ~/notes/           批量摄入目录下的文档
+  wkr ingest --file report.md         导入单个文件
+
 各命令详细选项请运行: wkr <command> --help
 """
 
@@ -283,7 +289,17 @@ def report(week, template_name, dry_run, dump_context):
     log_store = LogStore(cfg.data_dir)
     cache = GitStatsCache(Path(cfg.data_dir) / "cache" / "git_stats.db")
     git_collector = GitCollector(cfg.git, cfg.security, cache)
-    ctx_builder = ContextBuilder(cfg, log_store, git_collector)
+
+    # 初始化 VectorStore（如果 RAG 依赖可用）
+    vector_store = None
+    try:
+        from src.storage.vector_store import VectorStore, EmbeddingModel
+        embedding_model = EmbeddingModel(cfg.rag.embedding_model)
+        vector_store = VectorStore(Path(cfg.data_dir) / "index", embedding_model)
+    except ImportError:
+        console.print("[dim]⚠️ RAG 依赖未安装，跳过语义检索（pip install faiss-cpu sentence-transformers）[/dim]")
+
+    ctx_builder = ContextBuilder(cfg, log_store, git_collector, vector_store)
 
     # --dump-context：离线调试模式
     if dump_context:
@@ -413,6 +429,100 @@ def show(target_date, week):
             console.print(Panel(content, title=f"{d.isoformat()} 日志", border_style="blue"))
         else:
             console.print(f"[yellow]{d.isoformat()} 暂无日志[/yellow]")
+
+
+# ── wkr search ───────────────────────────────────────────
+
+@main.command(short_help="语义搜索历史日志")
+@click.argument("query")
+@click.option("--top-k", default=5, help="返回结果数量")
+def search(query, top_k):
+    """语义搜索历史日志
+
+    使用 Embedding 模型对查询文本和历史日志做相似度匹配。
+
+    \b
+    示例：
+      wkr search "用户认证"
+      wkr search "首页性能优化" --top-k 3
+    """
+    cfg = _load_cfg()
+    try:
+        from src.storage.vector_store import VectorStore, EmbeddingModel
+    except ImportError:
+        console.print("[red]❌ 需要安装 RAG 依赖: pip install faiss-cpu sentence-transformers[/red]")
+        sys.exit(1)
+
+    embedding_model = EmbeddingModel(cfg.rag.embedding_model)
+    vector_store = VectorStore(Path(cfg.data_dir) / "index", embedding_model)
+
+    if vector_store.total_chunks == 0:
+        console.print("[yellow]向量索引为空，请先运行 wkr report 或 wkr ingest 建立索引[/yellow]")
+        return
+
+    results = vector_store.search_by_similarity(query, top_k=top_k)
+    if not results:
+        console.print("[yellow]未找到相关历史记录[/yellow]")
+        return
+
+    table = Table(title=f"搜索结果: \"{query}\"")
+    table.add_column("日期", style="cyan")
+    table.add_column("来源", style="green")
+    table.add_column("距离", style="magenta")
+    table.add_column("仓库", style="blue")
+
+    for r in results:
+        table.add_row(
+            r.get("date", ""),
+            r.get("source", ""),
+            f"{r['score']:.4f}",
+            r.get("repo", ""),
+        )
+    console.print(table)
+
+
+# ── wkr ingest ───────────────────────────────────────────
+
+@main.command(short_help="摄入文档到向量索引")
+@click.option("--dir", "dirpath", type=click.Path(), help="扫描目录下的所有文档")
+@click.option("--file", "filepath", type=click.Path(), help="导入单个文件")
+def ingest(dirpath, filepath):
+    """摄入用户文档，建立语义索引
+
+    支持 .md / .txt / .docx 格式。摄入后可通过 wkr search 搜索。
+
+    \b
+    示例：
+      wkr ingest --dir ~/notes/          扫描目录下所有文档
+      wkr ingest --file report.md        导入单个文件
+    """
+    cfg = _load_cfg()
+    try:
+        from src.storage.vector_store import VectorStore, EmbeddingModel
+        from src.collectors.doc_collector import DocCollector
+    except ImportError:
+        console.print("[red]❌ 需要安装 RAG 依赖: pip install faiss-cpu sentence-transformers[/red]")
+        sys.exit(1)
+
+    embedding_model = EmbeddingModel(cfg.rag.embedding_model)
+    vector_store = VectorStore(Path(cfg.data_dir) / "index", embedding_model)
+    doc_collector = DocCollector(vector_store)
+
+    if dirpath:
+        console.print(f"[bold]📂 扫描目录: {dirpath}[/bold]")
+        file_count, chunk_count = doc_collector.ingest_dir(
+            dirpath, cfg.rag.chunk_size, cfg.rag.chunk_overlap
+        )
+        console.print(f"[green]✓ 已摄入 {file_count} 个文件，生成 {chunk_count} 个 chunk[/green]")
+    elif filepath:
+        console.print(f"[bold]📄 导入文件: {filepath}[/bold]")
+        count = doc_collector.ingest_file(
+            filepath, cfg.rag.chunk_size, cfg.rag.chunk_overlap
+        )
+        console.print(f"[green]✓ 已导入，生成 {count} 个 chunk[/green]")
+    else:
+        console.print("[yellow]请指定摄入方式: --dir 或 --file[/yellow]")
+        console.print("[dim]示例: wkr ingest --dir ~/notes/[/dim]")
 
 
 if __name__ == "__main__":
