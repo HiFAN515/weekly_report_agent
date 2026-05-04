@@ -2,7 +2,7 @@
 
 自动采集 Git 提交记录 + 用户文档，基于 LLM 提取结构化事实，通过模板引擎渲染，按周生成工作周报。
 
-支持 OpenAI / Anthropic / 通义千问 / Ollama 本地模型。
+支持 OpenAI / Anthropic / Ollama 本地模型。
 
 ## 环境要求
 
