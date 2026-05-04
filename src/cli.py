@@ -72,6 +72,9 @@ HELP_EPILOG = """快速参考
   wkr ingest --dir ~/notes/           批量摄入目录下的文档
   wkr ingest --file report.md         导入单个文件
 
+  wkr template --list                 列出可用模板
+  wkr template --new                  创建自定义模板
+
 各命令详细选项请运行: wkr <command> --help
 """
 
@@ -523,6 +526,113 @@ def ingest(dirpath, filepath):
     else:
         console.print("[yellow]请指定摄入方式: --dir 或 --file[/yellow]")
         console.print("[dim]示例: wkr ingest --dir ~/notes/[/dim]")
+
+
+# ── wkr template ─────────────────────────────────────────
+
+@main.command(short_help="模板管理")
+@click.option("--list", "list_templates", is_flag=True, help="列出可用模板")
+@click.option("--new", is_flag=True, help="创建自定义模板")
+def template(list_templates, new):
+    """管理周报模板
+
+    \b
+    示例：
+      wkr template --list            列出所有可用模板
+      wkr template --new             交互式创建新模板
+    """
+    cfg = _load_cfg()
+    templates_dir = Path(cfg.config_dir) / "templates"
+
+    if list_templates:
+        from src.generator.template_engine import TemplateEngine
+        engine = TemplateEngine(templates_dir)
+        templates = engine.list_templates()
+        if not templates:
+            console.print("[yellow]未找到模板[/yellow]")
+            return
+        for t in templates:
+            marker = " (默认)" if t == cfg.report.template else ""
+            console.print(f"  📄 {t}{marker}")
+        return
+
+    if new:
+        name = click.prompt("模板名称", default="custom")
+        md_path = templates_dir / f"{name}.md.j2"
+        schema_path = templates_dir / f"{name}.schema.yaml"
+
+        if md_path.exists():
+            if not click.confirm(f"模板 {name} 已存在，覆盖？"):
+                return
+
+        # 生成骨架
+        md_content = f"""# {{{{ project_name }}}} 周报 — W{{{{ week_num }}}}
+> {{{{ date_range }}}} | {{{{ author }}}}
+
+## 核心成果
+{{% for item in highlights %}}
+- {{{{ item }}}}
+{{% endfor %}}
+
+## 本周工作
+{{% for day in daily_work %}}
+**{{{{ day.weekday }}}} ({{{{ day.date }}}})**
+{{% for task in day.tasks %}}
+- {{{{ task }}}}
+{{% endfor %}}
+{{% endfor %}}
+
+## 下周计划
+{{% for plan in next_week %}}
+- {{{{ plan }}}}
+{{% endfor %}}
+"""
+        schema_content = """variables:
+  highlights:
+    type: list
+    items: string
+    min: 1
+    required: true
+  daily_work:
+    type: list
+    items:
+      type: object
+      properties:
+        date: { type: string }
+        weekday: { type: string }
+        tasks: { type: list, items: string }
+    required: true
+  next_week:
+    type: list
+    items: string
+    required: true
+  data_summary:
+    type: object
+    required: true
+  author:
+    type: string
+    source: config
+    default: "Unknown"
+  week_num:
+    type: integer
+    source: computed
+  date_range:
+    type: string
+    source: computed
+  project_name:
+    type: string
+    source: config
+    default: "MyProject"
+"""
+        md_path.write_text(md_content, encoding="utf-8")
+        schema_path.write_text(schema_content, encoding="utf-8")
+        console.print(f"[green]✓ 模板已创建:[/green]")
+        console.print(f"  📄 {md_path}")
+        console.print(f"  📋 {schema_path}")
+        console.print(f"[dim]使用: wkr report --template {name}[/dim]")
+        return
+
+    console.print("[yellow]请指定操作: --list 或 --new[/yellow]")
 
 
 if __name__ == "__main__":
