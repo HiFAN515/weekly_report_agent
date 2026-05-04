@@ -20,17 +20,7 @@ from src.storage.log_store import LogStore, format_week_summary_markdown
 
 # ── Token 估算 ───────────────────────────────────────────
 
-def estimate_tokens(text: str) -> int:
-    """
-    粗略估算 token 数
-
-    Phase 1 用字符近似（中文 1 字 ≈ 1.5 token，英文 1 词 ≈ 1.3 token）
-    Phase 2 接入 tokenizer 做精确计算
-    """
-    # 简单启发式：中文字符数 * 1.5 + 英文单词数 * 1.3
-    cn_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
-    en_chars = len(text) - cn_chars
-    return int(cn_chars * 1.5 + en_chars * 0.3)
+from src.preprocessor.token_estimator import estimate_tokens
 
 
 # ── 预算组装 ─────────────────────────────────────────────

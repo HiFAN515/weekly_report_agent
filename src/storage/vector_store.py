@@ -79,11 +79,7 @@ class EmbeddingModel:
 DAILY_CHUNK_THRESHOLD = 1500  # tokens
 
 
-def estimate_tokens(text: str) -> int:
-    """粗略估算 token 数"""
-    cn_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
-    en_chars = len(text) - cn_chars
-    return int(cn_chars * 1.5 + en_chars * 0.3)
+from src.preprocessor.token_estimator import estimate_tokens
 
 
 def chunk_daily_log(date_str: str, content: str, source: str,
