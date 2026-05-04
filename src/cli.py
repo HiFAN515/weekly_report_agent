@@ -89,9 +89,17 @@ def main():
 
 # ── wkr init ─────────────────────────────────────────────
 
-@main.command()
+@main.command(short_help="初始化配置向导")
 def init():
-    """初始化配置向导"""
+    """初始化配置向导
+
+    交互式创建 config.yaml，包含项目信息、Git 仓库、LLM 配置等。
+    首次使用必须先运行此命令。
+
+    \b
+    示例：
+      wkr init
+    """
     console.print(Panel("🔧 周报 Agent 初始化向导", style="bold blue"))
 
     name = click.prompt("项目名称", default="MyProject")
@@ -151,14 +159,32 @@ def init():
 
 # ── wkr log ──────────────────────────────────────────────
 
-@main.command()
+@main.command(short_help="记录今日工作")
 @click.option("--from-git", is_flag=True, help="从 Git 采集今日提交")
 @click.option("--manual", is_flag=True, help="手动输入工作日志")
 @click.option("--file", "filepath", type=click.Path(), help="从文件导入日志")
 @click.option("--date", "target_date", type=click.DateTime(formats=["%Y-%m-%d"]),
               help="指定日期（默认今天）")
 def log(from_git, manual, filepath, target_date):
-    """记录今日工作"""
+    """记录今日工作
+
+    支持三种采集方式：Git 自动采集、手动输入、文件导入。
+    数据保存到 data/logs/ 目录下，生成周报时会自动读取。
+
+    \b
+    示例：
+      wkr log --from-git                  采集今日本地 Git 提交
+      wkr log --from-git --date 2026-05-01
+                                          采集指定日期的 Git 提交
+      wkr log --manual                    交互式手动输入（Ctrl+D 结束）
+      wkr log --file notes.md             从文件导入到今天的日志
+      echo "做了XX" | wkr log --manual    管道输入
+
+    \b
+    注意：
+      --from-git 采集的是本地仓库的 commit，不需要先 push。
+      采集后会询问是否补充说明。
+    """
     cfg = _load_cfg()
     d = (target_date.date() if target_date else date.today())
 
@@ -220,7 +246,30 @@ def log(from_git, manual, filepath, target_date):
 @click.option("--dry-run", is_flag=True, help="输出原始 JSON，不渲染模板")
 @click.option("--dump-context", is_flag=True, help="输出预处理上下文（离线调试）")
 def report(week, template_name, dry_run, dump_context):
-    """生成周报"""
+    """生成周报
+
+    读取本周 Git 日志 + 手动记录，通过 LLM 提取结构化数据，
+    经两级 Schema 校验后用 Jinja2 模板渲染为 Markdown 周报。
+
+    \b
+    示例：
+      wkr report                          生成本周周报（使用默认模板）
+      wkr report --week 2026-04-28        生成指定周的周报
+      wkr report --template minimal       使用极简模板
+      wkr report --dry-run                只输出 LLM 提取的 JSON，不渲染
+      wkr report --dump-context           输出预处理上下文（不调用 LLM，调试用）
+
+    \b
+    工作流程：
+      1. 数据预处理：读日志 → 聚合统计 → 安全过滤 → token 预算分配
+      2. LLM 提取：从上下文中提取结构化 JSON（ReAct 或降级模式）
+      3. 两级校验：全局 JSON Schema → 模板 Schema
+      4. 模板渲染：Jinja2 填充模板，输出到 reports/ 目录
+
+    \b
+    输出路径：
+      reports/{start}_{end}_weekly_report.md
+    """
     cfg = _load_cfg()
     week_start = _get_week_start(week.date() if week else None)
     template_name = template_name or cfg.report.template
@@ -333,12 +382,19 @@ def report(week, template_name, dry_run, dump_context):
 
 # ── wkr show ─────────────────────────────────────────────
 
-@main.command()
+@main.command(short_help="查看日志")
 @click.option("--date", "target_date", type=click.DateTime(formats=["%Y-%m-%d"]),
               help="指定日期")
 @click.option("--week", is_flag=True, help="显示本周汇总")
 def show(target_date, week):
-    """查看日志"""
+    """查看已记录的工作日志
+
+    \b
+    示例：
+      wkr show                            查看今日日志
+      wkr show --date 2026-05-01          查看指定日期
+      wkr show --week                     查看本周汇总（所有天合并）
+    """
     cfg = _load_cfg()
     from src.storage.log_store import LogStore
     log_store = LogStore(cfg.data_dir)
