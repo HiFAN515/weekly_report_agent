@@ -254,7 +254,10 @@ def log(from_git, manual, filepath, target_date):
 @click.option("--template", "template_name", default=None, help="指定模板")
 @click.option("--dry-run", is_flag=True, help="输出原始 JSON，不渲染模板")
 @click.option("--dump-context", is_flag=True, help="输出预处理上下文（离线调试）")
-def report(week, template_name, dry_run, dump_context):
+@click.option("--format", "export_format", default=None,
+              type=click.Choice(["markdown", "docx", "html"]),
+              help="导出格式（默认读 config.yaml）")
+def report(week, template_name, dry_run, dump_context, export_format):
     """生成周报
 
     读取本周 Git 日志 + 手动记录，通过 LLM 提取结构化数据，
@@ -265,6 +268,8 @@ def report(week, template_name, dry_run, dump_context):
       wkr report                          生成本周周报（使用默认模板）
       wkr report --week 2026-04-28        生成指定周的周报
       wkr report --template minimal       使用极简模板
+      wkr report --format docx            导出为 DOCX
+      wkr report --format html            导出为 HTML
       wkr report --dry-run                只输出 LLM 提取的 JSON，不渲染
       wkr report --dump-context           输出预处理上下文（不调用 LLM，调试用）
 
@@ -386,9 +391,12 @@ def report(week, template_name, dry_run, dump_context):
     from src.generator.exporter import Exporter
     exporter = Exporter(cfg.report.output_dir)
     week_end = week_start + timedelta(days=6)
+    fmt = export_format or cfg.report.format
 
-    if cfg.report.format == "docx":
+    if fmt == "docx":
         filepath = exporter.export_docx(rendered, week_start, week_end)
+    elif fmt == "html":
+        filepath = exporter.export_html(rendered, week_start, week_end)
     else:
         filepath = exporter.export_markdown(rendered, week_start, week_end)
 
