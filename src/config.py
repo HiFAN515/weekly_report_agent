@@ -53,7 +53,7 @@ class SecurityConfig:
 
 @dataclass
 class LLMConfig:
-    provider: str = "openai"  # openai | anthropic | dashscope | ollama
+    provider: str = "openai"  # openai | anthropic | ollama（或任何 OpenAI 兼容 API）
     model: str = "gpt-4o-mini"
     api_key: str = ""
     base_url: Optional[str] = None

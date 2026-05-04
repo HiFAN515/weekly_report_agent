@@ -2,7 +2,7 @@
 
 自动采集 Git 提交记录 + 用户文档，基于 LLM 提取结构化事实，通过模板引擎渲染，按周生成工作周报。
 
-支持 OpenAI / Anthropic / 通义千问 / Ollama 本地模型。
+支持 OpenAI / Anthropic / Ollama 本地模型，以及任何 OpenAI 兼容 API。
 
 ## 环境要求
 
@@ -168,7 +168,7 @@ repositories:
 
 # LLM 配置
 llm:
-  provider: "anthropic"              # openai | anthropic | dashscope | ollama
+  provider: "anthropic"              # openai | anthropic | ollama（或任何 OpenAI 兼容 API）
   model: "claude-sonnet-4-20250514"
   api_key: "${ANTHROPIC_API_KEY}"    # 环境变量替换
   # base_url: "http://localhost:11434/v1"  # Ollama 或自定义网关

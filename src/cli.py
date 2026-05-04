@@ -125,11 +125,11 @@ def init():
                             type=click.Choice(["standard", "minimal", "project"]))
 
     provider = click.prompt("LLM 提供商", default="1",
-                            type=click.Choice(["1", "2", "3", "4"]))
-    provider_map = {"1": "openai", "2": "anthropic", "3": "dashscope", "4": "ollama"}
+                            type=click.Choice(["1", "2", "3"]))
+    provider_map = {"1": "openai", "2": "anthropic", "3": "ollama"}
     provider_name = provider_map[provider]
 
-    if provider_name in ("openai", "anthropic", "dashscope"):
+    if provider_name in ("openai", "anthropic"):
         console.print("\n[yellow]⚠️ 提醒：使用云端 LLM 时，您的工作日志数据将被传输至第三方服务器。[/yellow]")
         console.print("[yellow]   对于敏感项目，建议选择本地 Ollama。[/yellow]\n")
 

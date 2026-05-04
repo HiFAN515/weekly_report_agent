@@ -31,7 +31,7 @@ security:
 
 # ── LLM 配置 ─────────────────────────────────────────────
 llm:
-  provider: "anthropic"            # openai | anthropic | dashscope | ollama
+  provider: "anthropic"            # openai | anthropic | ollama（或任何 OpenAI 兼容 API）
   model: "MiniMax-M2.7"          # anthropic: claude-sonnet-4-20250514, ollama: qwen2.5:7b
   api_key: "${ANTHROPIC_API_KEY}"  # 支持 ${ENV_VAR} 替换，Anthropic 用 ${ANTHROPIC_API_KEY}
   base_url: https://api.minimaxi.com/anthropic             # 自定义 API 地址（Ollama: http://localhost:11434/v1）
