@@ -105,10 +105,11 @@ class ContextBuilder:
     """数据预处理 + 上下文组装"""
 
     def __init__(self, config: AppConfig, log_store: LogStore,
-                 git_collector: GitCollector):
+                 git_collector: GitCollector, vector_store=None):
         self.config = config
         self.log_store = log_store
         self.git_collector = git_collector
+        self.vector_store = vector_store
         self._last_budget_info: dict = {}
 
     def build(self, week_start: date, mode: str = "react") -> tuple[str, list[DayCommits], dict]:
@@ -130,9 +131,15 @@ class ContextBuilder:
             global_author=self.config.project.author,
         )
 
-        # 2. 保存日志文件
+        # 2. 保存日志文件 + 索引到向量库
         for day in week_days:
             self.log_store.save_git_day(day, self.config.security.level)
+            if self.vector_store:
+                content = self.log_store.get_day_content(day.date)
+                if content:
+                    self.vector_store.index_log(
+                        day.date.isoformat(), content, "git", day.repo_alias
+                    )
 
         # 3. 聚合统计
         week_stats = self.git_collector.get_week_stats(week_days)
@@ -157,8 +164,41 @@ class ContextBuilder:
                     log_parts.append(f"    文件: {files} | +{c.insertions}/-{c.deletions}")
         logs_text = "\n".join(log_parts)
 
-        # 6. 历史上下文（Phase 1 留空，Phase 2 接入 RAG）
-        history = "（历史上下文检索将在 Phase 2 中接入）"
+        # 6. RAG 检索历史上下文
+        history = ""
+        if self.vector_store and self.vector_store.total_chunks > 0:
+            week_logs_for_query = summary + "\n" + logs_text
+            results = self.vector_store.search_by_similarity(
+                query_text=week_logs_for_query,
+                exclude_week=week_start.isoformat(),
+                top_k=self.config.rag.top_k,
+            )
+            if results:
+                history_parts = []
+                for r in results:
+                    date_str = r.get("date", "")
+                    source = r.get("source", "")
+                    repo = r.get("repo", "")
+                    meta_info = f"[来源: {date_str}]"
+                    if repo:
+                        meta_info += f" {repo}"
+                    # 从 log_store 获取原文
+                    if date_str:
+                        from datetime import datetime as dt
+                        try:
+                            d = dt.fromisoformat(date_str).date()
+                            original = self.log_store.get_day_content(d)
+                            if original:
+                                # 截断
+                                history_parts.append(
+                                    f"{meta_info}\n{original[:500]}"
+                                )
+                        except (ValueError, OSError):
+                            pass
+                history = "\n\n".join(history_parts)
+
+        if not history:
+            history = "（暂无历史上下文）"
 
         # 7. 按预算组装
         llm_window = 128000  # 默认上下文窗口，后续从模型配置读取
