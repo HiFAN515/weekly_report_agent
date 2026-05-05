@@ -103,14 +103,18 @@ def add_repo(data: dict, path: str, branch: str = "main", alias: str = "", autho
     try:
         import git
         repo = git.Repo(str(resolved))
-        remote_branches = [b.name.replace("origin/", "") for b in repo.remote().refs]
         local_branches = [b.name for b in repo.branches]
-        all_branches = set(remote_branches + local_branches)
+        all_branches = set(local_branches)
+        try:
+            remote_branches = [b.name.replace("origin/", "") for b in repo.remote().refs]
+            all_branches.update(remote_branches)
+        except ValueError:
+            pass  # 没有 remote，只检查本地分支
         if branch not in all_branches:
             available = ", ".join(sorted(all_branches)[:10])
             return False, f"分支 '{branch}' 不存在。可用分支: {available}"
-    except Exception:
-        pass  # 无法检查时跳过（允许后续采集时报错）
+    except Exception as e:
+        pass  # 无法检查时跳过
 
     # 检查是否已存在（路径 + 分支 组合去重）
     resolved_str = str(resolved)
