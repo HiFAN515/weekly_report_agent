@@ -576,54 +576,77 @@ def template(list_templates, new):
             if not click.confirm(f"模板 {name} 已存在，覆盖？"):
                 return
 
-        # 生成骨架
-        md_content = f"""# {{{{ project_name }}}} 周报 — W{{{{ week_num }}}}
-> {{{{ date_range }}}} | {{{{ author }}}}
+        # 交互式选择模板内容
+        console.print("\n[bold]选择模板包含的内容（y/n）：[/bold]")
 
-## 核心成果
-{{% for item in highlights %}}
-- {{{{ item }}}}
-{{% endfor %}}
+        sections = {
+            "title": ("标题（项目名 + 周数 + 日期 + 作者）", True),
+            "highlights": ("核心成果列表", True),
+            "daily_work": ("按天详细工作", True),
+            "issues": ("问题与风险表格", True),
+            "next_week": ("下周计划", True),
+            "data_summary": ("数据摘要（commit 数、文件数等）", True),
+        }
 
-## 本周工作
-{{% for day in daily_work %}}
-**{{{{ day.weekday }}}} ({{{{ day.date }}}})**
-{{% for task in day.tasks %}}
-- {{{{ task }}}}
-{{% endfor %}}
-{{% endfor %}}
+        selected = {}
+        for key, (desc, default) in sections.items():
+            selected[key] = click.confirm(f"  {desc}？", default=default)
 
-## 下周计划
-{{% for plan in next_week %}}
-- {{{{ plan }}}}
-{{% endfor %}}
-"""
-        schema_content = """variables:
-  highlights:
-    type: list
-    items: string
-    min: 1
-    required: true
-  daily_work:
-    type: list
-    items:
-      type: object
-      properties:
-        date: { type: string }
-        weekday: { type: string }
-        tasks: { type: list, items: string }
-    required: true
-  next_week:
-    type: list
-    items: string
-    required: true
-  data_summary:
-    type: object
-    required: true
+        # 标题样式选择
+        title_style = "full"
+        if selected["title"]:
+            console.print("\n标题样式：")
+            console.print("  1. 完整：# 项目名 — W周数\\n> 日期范围 | 作者")
+            console.print("  2. 简洁：# 项目名 W周数")
+            console.print("  3. 不要标题")
+            style = click.prompt("选择", default="1", type=click.Choice(["1", "2", "3"]))
+            title_style = {"1": "full", "2": "simple", "3": "none"}[style]
+
+        # 生成模板
+        md_parts = []
+        schema_parts = []
+
+        # 标题
+        if title_style == "full":
+            md_parts.append(f"# {{{{ project_name }}}} 周报 — W{{{{ week_num }}}}\n> {{{{ date_range }}}} | {{{{ author }}}}")
+        elif title_style == "simple":
+            md_parts.append(f"# {{{{ project_name }}}} W{{{{ week_num }}}}")
+
+        # 核心成果
+        if selected["highlights"]:
+            md_parts.append("## 核心成果\n{% for item in highlights %}\n- {{ item }}\n{% endfor %}")
+            schema_parts.append("  highlights:\n    type: list\n    items: string\n    min: 1\n    required: true")
+
+        # 按天工作
+        if selected["daily_work"]:
+            md_parts.append("## 本周工作\n{% for day in daily_work %}\n**{{ day.weekday }} ({{ day.date }})**\n{% for task in day.tasks %}\n- {{ task }}\n{% endfor %}\n{% endfor %}")
+            schema_parts.append("  daily_work:\n    type: list\n    items:\n      type: object\n      properties:\n        date: { type: string }\n        weekday: { type: string }\n        tasks: { type: list, items: string }\n    required: true")
+
+        # 问题
+        if selected["issues"]:
+            md_parts.append("## 问题与风险\n{% if issues %}\n| 问题 | 状态 |\n|------|------|\n{% for issue in issues %}\n| {{ issue.description }} | {{ issue.status }} |\n{% endfor %}\n{% else %}\n本周无遗留问题 ✅\n{% endif %}")
+            schema_parts.append("  issues:\n    type: list\n    items:\n      type: object\n      properties:\n        description: { type: string }\n        status: { type: string, enum: [已解决, 处理中, 待解决, 已搁置] }\n    required: false")
+
+        # 下周计划
+        if selected["next_week"]:
+            md_parts.append("## 下周计划\n{% for plan in next_week %}\n- [ ] {{ plan }}\n{% endfor %}")
+            schema_parts.append("  next_week:\n    type: list\n    items: string\n    required: true")
+
+        # 数据摘要
+        if selected["data_summary"]:
+            md_parts.append("---\n> Git {{ data_summary.git_commits }} commits | +{{ data_summary.insertions }} / -{{ data_summary.deletions }} | {{ data_summary.files_changed }} files")
+            schema_parts.append("  data_summary:\n    type: object\n    required: true")
+
+        # 组合
+        md_content = "\n\n".join(md_parts) + "\n"
+        schema_content = "variables:\n" + "\n".join(schema_parts) + """
   author:
     type: string
     source: config
     default: "Unknown"
+  year:
+    type: integer
+    source: computed
   week_num:
     type: integer
     source: computed
@@ -635,12 +658,14 @@ def template(list_templates, new):
     source: config
     default: "MyProject"
 """
+
         md_path.write_text(md_content, encoding="utf-8")
         schema_path.write_text(schema_content, encoding="utf-8")
-        console.print(f"[green]✓ 模板已创建:[/green]")
+        console.print(f"\n[green]✓ 模板已创建:[/green]")
         console.print(f"  📄 {md_path}")
         console.print(f"  📋 {schema_path}")
         console.print(f"[dim]使用: wkr report --template {name}[/dim]")
+        console.print(f"[dim]编辑模板: {md_path}[/dim]")
         return
 
     console.print("[yellow]请指定操作: --list 或 --new[/yellow]")
