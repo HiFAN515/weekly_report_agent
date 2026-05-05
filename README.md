@@ -28,11 +28,11 @@ pip install faiss-cpu sentence-transformers tiktoken
 ```
 
 ### 2. 初始化配置
-
+将`config.yaml.example`改名为`config.yaml`并配置git仓库、llm供应商等内容。
+或者用bash命令配置：
 ```bash
 wkr init
 ```
-
 交互式填写项目信息、Git 仓库、LLM 提供商、安全等级等，生成 `config.yaml`。
 
 ### 3. 设置 API Key
