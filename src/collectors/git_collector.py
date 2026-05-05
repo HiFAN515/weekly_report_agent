@@ -254,6 +254,11 @@ class GitCollector:
         try:
             for c in repo.iter_commits(rev, **kwargs):
                 local_date = c.committed_datetime.astimezone(self.tz)
+                # 本地二次过滤：确保 commit 日期在 [since, until] 范围内
+                # git 的 --since/--until 基于 author date，且时区处理可能不一致
+                commit_date = local_date.date()
+                if commit_date < since or commit_date > until:
+                    continue
                 commits.append(GitCommit(
                     hash=c.hexsha[:8],
                     author=str(c.author),
