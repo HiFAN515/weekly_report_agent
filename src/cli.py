@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import click
+import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -75,6 +76,12 @@ HELP_EPILOG = """快速参考
 
   wkr template --list                 列出可用模板
   wkr template --new                  创建自定义模板
+
+  wkr config                          查看当前配置
+  wkr config --list-fields            列出所有可配置字段
+  wkr config --set KEY VALUE          修改配置项
+  wkr config --add-repo PATH          添加 Git 仓库
+  wkr config --remove-repo PATH       移除 Git 仓库
 
 各命令详细选项请运行: wkr <command> --help
 """
@@ -689,6 +696,114 @@ def template(list_templates, new):
         return
 
     console.print("[yellow]请指定操作: --list 或 --new[/yellow]")
+
+
+# ── wkr config ───────────────────────────────────────────
+
+@main.command(short_help="配置管理")
+@click.option("--show", is_flag=True, help="显示当前配置")
+@click.option("--set", "set_key", nargs=2, type=str, default=None,
+              metavar="KEY VALUE", help="设置配置值（如: llm.model gpt-4o）")
+@click.option("--add-repo", "add_repo_path", type=str, default=None,
+              help="添加 Git 仓库路径")
+@click.option("--remove-repo", "remove_repo_path", type=str, default=None,
+              help="移除 Git 仓库路径")
+@click.option("--list-fields", is_flag=True, help="列出所有可配置字段")
+def config(show, set_key, add_repo_path, remove_repo_path, list_fields):
+    """配置管理
+
+    在 CLI 中查看和修改 config.yaml，不用手动编辑文件。
+
+    \b
+    示例：
+      wkr config --show                     查看当前配置
+      wkr config --list-fields              列出所有可配置字段
+      wkr config --set llm.model gpt-4o     修改 LLM 模型
+      wkr config --set report.format docx   设置默认导出格式
+      wkr config --set security.level strict
+      wkr config --add-repo ~/projects/backend
+      wkr config --remove-repo ~/projects/old-repo
+    """
+    from src.config import find_config
+    from src.config_manager import (
+        load_raw_config, save_raw_config, get_nested, set_nested,
+        parse_value, add_repo, remove_repo, CONFIG_FIELDS,
+    )
+
+    config_path = find_config()
+
+    if list_fields:
+        table = Table(title="可配置字段")
+        table.add_column("Key", style="cyan")
+        table.add_column("说明", style="green")
+        table.add_column("当前值", style="yellow")
+        data = load_raw_config(config_path)
+        for key, desc in CONFIG_FIELDS.items():
+            val = get_nested(data, key)
+            table.add_row(key, desc, str(val) if val is not None else "—")
+        console.print(table)
+        return
+
+    if show:
+        data = load_raw_config(config_path)
+        # 隐藏 api_key
+        import copy
+        display = copy.deepcopy(data)
+        if "llm" in display and "api_key" in display["llm"]:
+            key = display["llm"]["api_key"]
+            if key and len(key) > 8:
+                display["llm"]["api_key"] = key[:4] + "****" + key[-4:]
+        console.print(yaml.dump(display, allow_unicode=True, default_flow_style=False, sort_keys=False))
+        return
+
+    if set_key:
+        key, raw_value = set_key
+        if key not in CONFIG_FIELDS:
+            console.print(f"[red]❌ 未知字段: {key}[/red]")
+            console.print("[dim]运行 wkr config --list-fields 查看所有可配置字段[/dim]")
+            sys.exit(1)
+
+        data = load_raw_config(config_path)
+        old_val = get_nested(data, key)
+        new_val = parse_value(raw_value)
+        set_nested(data, key, new_val)
+        save_raw_config(config_path, data)
+        console.print(f"[green]✓ {key}: {old_val} → {new_val}[/green]")
+        return
+
+    if add_repo_path:
+        path = str(Path(add_repo_path).expanduser().resolve())
+        alias = click.prompt("仓库别名（留空用目录名）", default="", show_default=False)
+        branch = click.prompt("默认分支", default="main")
+        data = load_raw_config(config_path)
+        ok, msg = add_repo(data, path, branch=branch, alias=alias)
+        if ok:
+            save_raw_config(config_path, data)
+            console.print(f"[green]✓ {msg}[/green]")
+        else:
+            console.print(f"[yellow]⚠️ {msg}[/yellow]")
+        return
+
+    if remove_repo_path:
+        path = str(Path(remove_repo_path).expanduser().resolve())
+        data = load_raw_config(config_path)
+        ok, msg = remove_repo(data, path)
+        if ok:
+            save_raw_config(config_path, data)
+            console.print(f"[green]✓ {msg}[/green]")
+        else:
+            console.print(f"[yellow]⚠️ {msg}[/yellow]")
+        return
+
+    # 无参数时显示当前配置
+    data = load_raw_config(config_path)
+    import copy
+    display = copy.deepcopy(data)
+    if "llm" in display and "api_key" in display["llm"]:
+        key = display["llm"]["api_key"]
+        if key and len(key) > 8:
+            display["llm"]["api_key"] = key[:4] + "****" + key[-4:]
+    console.print(yaml.dump(display, allow_unicode=True, default_flow_style=False, sort_keys=False))
 
 
 if __name__ == "__main__":
