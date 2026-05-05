@@ -340,12 +340,18 @@ def report(week, template_name, dry_run, dump_context, export_format):
     from src.agent.tools import ToolExecutor
     from src.agent.schema import ReportSchemaValidator
 
+    # 构建 git_repos 映射 {alias: path}
+    git_repos = {repo.alias or Path(repo.path).name: repo.path
+                 for repo in cfg.repositories}
+
     tool_executor = ToolExecutor(
         week_days=week_days,
         week_stats=week_stats,
         day_contents={d.isoformat(): log_store.get_day_content(d)
                       for d in log_store.get_week_dates(week_start)},
         security_level=cfg.security.level,
+        max_diff_chars=cfg.security.max_diff_chars,
+        git_repos=git_repos,
     )
 
     agent = ReportAgent(cfg.llm)

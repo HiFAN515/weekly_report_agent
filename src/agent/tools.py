@@ -7,9 +7,10 @@ Agent 工具定义 + 执行器
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Callable
 
-from src.collectors.git_collector import DayCommits
+from src.collectors.git_collector import GitCommit, DayCommits
 from src.storage.log_store import format_week_summary_markdown, format_day_markdown
 
 
@@ -88,18 +89,23 @@ class ToolExecutor:
     """工具执行器，绑定实际数据"""
 
     def __init__(self, week_days: list[DayCommits], week_stats: dict,
-                 day_contents: dict[str, str], security_level: str):
+                 day_contents: dict[str, str], security_level: str,
+                 max_diff_chars: int = 500, git_repos: dict[str, str] = None):
         """
         Args:
             week_days: 本周 DayCommits 列表
             week_stats: 本周统计数据
             day_contents: {日期字符串: 完整日志文本}
             security_level: 安全级别
+            max_diff_chars: full 模式下 diff 最大字符数
+            git_repos: {repo_alias: repo_path} 用于 full 模式获取 diff
         """
         self.week_days = week_days
         self.week_stats = week_stats
         self.day_contents = day_contents
         self.security_level = security_level
+        self.max_diff_chars = max_diff_chars
+        self.git_repos = git_repos or {}
         self.submitted_data: dict | None = None
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
@@ -131,7 +137,7 @@ class ToolExecutor:
         return f"未找到 {date} 的日志记录"
 
     def _get_file_change_summary(self, date: str = "") -> str:
-        """返回文件变更摘要"""
+        """返回文件变更摘要（full 模式含 diff 片段）"""
         lines = []
         for day in self.week_days:
             if date and day.date.isoformat() != date:
@@ -142,8 +148,45 @@ class ToolExecutor:
                 extra = f" +{len(c.files_changed) - 5} more" if len(c.files_changed) > 5 else ""
                 lines.append(f"  {c.hash} {c.message.split(chr(10))[0][:50]}")
                 lines.append(f"    {files_str}{extra} | +{c.insertions}/-{c.deletions}")
+
+                # full 模式：获取 diff 片段
+                if self.security_level == "full" and c.files_changed:
+                    diff_text = self._get_commit_diff(c, day.repo_alias)
+                    if diff_text:
+                        lines.append(f"    diff: {diff_text}")
             lines.append("")
         return "\n".join(lines) if lines else "无文件变更数据"
+
+    def _get_commit_diff(self, commit: GitCommit, repo_alias: str) -> str:
+        """获取单个 commit 的 diff 摘要（仅 full 模式）"""
+        repo_path = self.git_repos.get(repo_alias)
+        if not repo_path:
+            return ""
+
+        try:
+            import git
+            repo = git.Repo(repo_path)
+            c = repo.commit(commit.hash)
+            diffs = c.diff(c.parents[0]) if c.parents else c.diff(None)
+
+            diff_parts = []
+            total_chars = 0
+            for d in diffs:
+                if total_chars >= self.max_diff_chars:
+                    break
+                if d.diff:
+                    text = d.diff.decode("utf-8", errors="replace")
+                    # 只取前几行
+                    snippet = "\n".join(text.split("\n")[:5])
+                    remaining = self.max_diff_chars - total_chars
+                    if len(snippet) > remaining:
+                        snippet = snippet[:remaining] + "..."
+                    diff_parts.append(f"--- {d.a_path} ---\n{snippet}")
+                    total_chars += len(snippet)
+
+            return "\n".join(diff_parts)
+        except Exception:
+            return ""
 
     def _submit_report_data(self, report_data: dict) -> str:
         """接收 LLM 提交的结构化数据"""
