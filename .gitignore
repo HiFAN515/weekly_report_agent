@@ -12,4 +12,5 @@ data/reports/
 .env
 config.yaml
 AGENTS.md
-./hermes
+.hermes/
+reports/
