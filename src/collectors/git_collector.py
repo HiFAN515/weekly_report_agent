@@ -82,18 +82,44 @@ def _get_timezone(tz_name: str) -> timezone:
     """
     获取时区对象
 
-    支持常见命名：Asia/Shanghai, UTC, 等。
-    不依赖 pytz/zoneinfo 的完整数据库，用固定偏移处理常见情况。
+    支持常见命名，不依赖 pytz/zoneinfo。
     """
     tz_map = {
-        "Asia/Shanghai": timezone(timedelta(hours=8)),
-        "Asia/Tokyo": timezone(timedelta(hours=9)),
-        "US/Eastern": timezone(timedelta(hours=-5)),
-        "US/Pacific": timezone(timedelta(hours=-8)),
-        "Europe/London": timezone(timedelta(hours=0)),
-        "UTC": timezone.utc,
+        # 亚洲
+        "Asia/Shanghai":  timezone(timedelta(hours=8)),    # 中国
+        "Asia/Hong_Kong": timezone(timedelta(hours=8)),    # 香港
+        "Asia/Taipei":    timezone(timedelta(hours=8)),    # 台湾
+        "Asia/Tokyo":     timezone(timedelta(hours=9)),    # 日本
+        "Asia/Seoul":     timezone(timedelta(hours=9)),    # 韩国
+        "Asia/Singapore": timezone(timedelta(hours=8)),    # 新加坡
+        "Asia/Kolkata":   timezone(timedelta(hours=5, minutes=30)),  # 印度
+        "Asia/Dubai":     timezone(timedelta(hours=4)),    # 迪拜
+        # 欧洲
+        "Europe/London":  timezone(timedelta(hours=0)),    # 英国
+        "Europe/Berlin":  timezone(timedelta(hours=1)),    # 德国
+        "Europe/Paris":   timezone(timedelta(hours=1)),    # 法国
+        "Europe/Moscow":  timezone(timedelta(hours=3)),    # 俄罗斯
+        # 北美
+        "US/Eastern":     timezone(timedelta(hours=-5)),   # 美东
+        "US/Central":     timezone(timedelta(hours=-6)),   # 美中
+        "US/Mountain":    timezone(timedelta(hours=-7)),   # 美山
+        "US/Pacific":     timezone(timedelta(hours=-8)),   # 美西
+        # 其他
+        "Australia/Sydney": timezone(timedelta(hours=11)), # 澳洲
+        "Pacific/Auckland": timezone(timedelta(hours=13)), # 新西兰
+        "UTC":            timezone.utc,
     }
     return tz_map.get(tz_name, timezone.utc)
+
+
+# 支持的时区列表（供 CLI 展示）
+SUPPORTED_TIMEZONES = [
+    "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Taipei", "Asia/Tokyo",
+    "Asia/Seoul", "Asia/Singapore", "Asia/Kolkata", "Asia/Dubai",
+    "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Moscow",
+    "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+    "Australia/Sydney", "Pacific/Auckland", "UTC",
+]
 
 
 # ── 采集器 ───────────────────────────────────────────────

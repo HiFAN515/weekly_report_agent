@@ -123,7 +123,7 @@ def remove_repo(data: dict, path: str):
 CONFIG_FIELDS = {
     "project.name": "项目名称",
     "project.author": "默认作者",
-    "git.timezone": "时区（如 Asia/Shanghai）",
+    "git.timezone": "时区（Asia/Shanghai, Asia/Tokyo, US/Eastern, Europe/London, UTC 等）",
     "git.branch_strategy": "分支策略（merged/all/current）",
     "git.no_merges": "过滤 merge commit（true/false）",
     "security.level": "安全等级（strict/balanced/full）",

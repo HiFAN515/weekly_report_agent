@@ -14,7 +14,7 @@ repositories:
     # author: ""                # 可选，覆盖全局 author
 
 git:
-  timezone: "Asia/Shanghai"     # 采集时使用的时区
+  timezone: "Asia/Shanghai"     # 可选: Asia/Shanghai, Asia/Tokyo, Asia/Seoul, Asia/Singapore, Europe/London, Europe/Berlin, US/Eastern, US/Pacific, UTC 等
   branch_strategy: "merged"     # merged | all | current
   no_merges: true               # 过滤 merge commit
 
