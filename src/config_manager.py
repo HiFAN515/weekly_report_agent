@@ -132,16 +132,38 @@ def add_repo(data: dict, path: str, branch: str = "main", alias: str = "", autho
     return True, f"已添加仓库: {resolved} (分支: {branch})"
 
 
-def remove_repo(data: dict, path: str):
-    """从 repositories 列表移除一个仓库"""
+def remove_repo(data: dict, path: str, branch: str = None):
+    """从 repositories 列表移除一个仓库
+
+    Args:
+        path: 仓库路径
+        branch: 指定分支（None 则移除该路径下所有分支）
+    """
     if "repositories" not in data:
         return False, "未配置任何仓库"
 
+    resolved = str(Path(path).expanduser().resolve())
     before = len(data["repositories"])
-    data["repositories"] = [r for r in data["repositories"] if r.get("path") != path]
-    if len(data["repositories"]) < before:
-        return True, f"已移除仓库: {path}"
-    return False, f"未找到仓库: {path}"
+
+    if branch:
+        # 只移除指定路径+分支的条目
+        data["repositories"] = [
+            r for r in data["repositories"]
+            if not (str(Path(r.get("path", "")).expanduser().resolve()) == resolved
+                    and r.get("branch") == branch)
+        ]
+        if len(data["repositories"]) < before:
+            return True, f"已移除仓库: {path} (分支: {branch})"
+        return False, f"未找到仓库: {path} (分支: {branch})"
+    else:
+        # 移除该路径下所有分支
+        data["repositories"] = [
+            r for r in data["repositories"]
+            if str(Path(r.get("path", "")).expanduser().resolve()) != resolved
+        ]
+        if len(data["repositories"]) < before:
+            return True, f"已移除仓库: {path}（所有分支）"
+        return False, f"未找到仓库: {path}"
 
 
 # ── 可配置字段说明 ───────────────────────────────────────

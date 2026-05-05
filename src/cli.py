@@ -731,8 +731,10 @@ def template(list_templates, new):
               help="添加 Git 仓库路径")
 @click.option("--remove-repo", "remove_repo_path", type=str, default=None,
               help="移除 Git 仓库路径")
+@click.option("--branch", "repo_branch", type=str, default=None,
+              help="指定分支（配合 --add-repo 或 --remove-repo 使用）")
 @click.option("--list-fields", is_flag=True, help="列出所有可配置字段")
-def config(show, set_key, add_repo_path, remove_repo_path, list_fields):
+def config(show, set_key, add_repo_path, remove_repo_path, repo_branch, list_fields):
     """配置管理
 
     在 CLI 中查看和修改 config.yaml，不用手动编辑文件。
@@ -745,7 +747,9 @@ def config(show, set_key, add_repo_path, remove_repo_path, list_fields):
       wkr config --set report.format docx   设置默认导出格式
       wkr config --set security.level strict
       wkr config --add-repo ~/projects/backend
+      wkr config --add-repo ~/projects/backend --branch develop
       wkr config --remove-repo ~/projects/old-repo
+      wkr config --remove-repo ~/projects/backend --branch develop
     """
     from src.config import find_config
     from src.config_manager import (
@@ -828,7 +832,10 @@ def config(show, set_key, add_repo_path, remove_repo_path, list_fields):
     if remove_repo_path:
         path = str(Path(remove_repo_path).expanduser().resolve())
         data = load_raw_config(config_path)
-        ok, msg = remove_repo(data, path)
+        if repo_branch:
+            ok, msg = remove_repo(data, path, branch=repo_branch)
+        else:
+            ok, msg = remove_repo(data, path)
         if ok:
             save_raw_config(config_path, data)
             console.print(f"[green]✓ {msg}[/green]")
