@@ -39,10 +39,10 @@ wkr init
 
 ```bash
 # OpenAI
-export OPENAI_API_KEY=sk-xxx
+export OPENAI_API_KEY=***
 
 # Anthropic
-export ANTHROPIC_API_KEY=sk-ant-xxx
+export ANTHROPIC_API_KEY=***
 
 # 也可以直接写在 config.yaml 的 api_key 字段
 # config.yaml 已在 .gitignore 中，不会被提交
