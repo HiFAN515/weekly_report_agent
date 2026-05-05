@@ -59,11 +59,6 @@ class EmbeddingModel:
 
     def _load(self):
         """延迟加载模型"""
-        import os
-        # 国内默认使用 HuggingFace 镜像
-        if not os.environ.get("HF_ENDPOINT"):
-            os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-
         from sentence_transformers import SentenceTransformer
         print(f"⏳ 加载 Embedding 模型: {self.model_name} ...")
         self._model = SentenceTransformer(self.model_name)
