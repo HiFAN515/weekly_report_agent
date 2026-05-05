@@ -65,6 +65,7 @@ HELP_EPILOG = """快速参考
   wkr show                            查看今日日志
   wkr show --date YYYY-MM-DD          指定日期
   wkr show --week                     本周汇总
+  wkr show --repos                    查看已配置的 Git 仓库
 
   wkr search "关键词"                  语义搜索历史日志
   wkr search "关键词" --top-k 10      指定返回数量
@@ -416,7 +417,8 @@ def report(week, template_name, dry_run, dump_context, export_format):
 @click.option("--date", "target_date", type=click.DateTime(formats=["%Y-%m-%d"]),
               help="指定日期")
 @click.option("--week", is_flag=True, help="显示本周汇总")
-def show(target_date, week):
+@click.option("--repos", is_flag=True, help="显示当前配置的 Git 仓库")
+def show(target_date, week, repos):
     """查看已记录的工作日志
 
     \b
@@ -424,8 +426,26 @@ def show(target_date, week):
       wkr show                            查看今日日志
       wkr show --date 2026-05-01          查看指定日期
       wkr show --week                     查看本周汇总（所有天合并）
+      wkr show --repos                    查看当前配置的 Git 仓库
     """
     cfg = _load_cfg()
+
+    if repos:
+        table = Table(title="已配置的 Git 仓库")
+        table.add_column("#", style="dim")
+        table.add_column("路径", style="cyan")
+        table.add_column("别名", style="green")
+        table.add_column("分支", style="magenta")
+        table.add_column("Author", style="yellow")
+
+        for i, repo in enumerate(cfg.repositories, 1):
+            alias = repo.alias or Path(repo.path).name
+            author = repo.author or f"{cfg.project.author} (默认)"
+            table.add_row(str(i), repo.path, alias, repo.branch, author)
+
+        console.print(table)
+        return
+
     from src.storage.log_store import LogStore
     log_store = LogStore(cfg.data_dir)
 
