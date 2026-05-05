@@ -512,20 +512,37 @@ def search(query, top_k):
         console.print("[yellow]未找到相关历史记录[/yellow]")
         return
 
+    from src.storage.log_store import LogStore
+    log_store = LogStore(cfg.data_dir)
+
     table = Table(title=f"搜索结果: \"{query}\"")
     table.add_column("日期", style="cyan")
     table.add_column("来源", style="green")
-    table.add_column("距离", style="magenta")
     table.add_column("仓库", style="blue")
+    table.add_column("内容摘要", style="white")
 
     for r in results:
-        table.add_row(
-            r.get("date", ""),
-            r.get("source", ""),
-            f"{r['score']:.4f}",
-            r.get("repo", ""),
-        )
+        date_str = r.get("date", "")
+        repo = r.get("repo", "")
+        # 获取日志原文
+        summary = ""
+        if date_str:
+            try:
+                from datetime import datetime as dt
+                d = dt.fromisoformat(date_str).date()
+                content = log_store.get_day_content(d)
+                if content:
+                    # 取前 100 字符作为摘要
+                    summary = content[:100].replace("\n", " ").strip()
+                    if len(content) > 100:
+                        summary += "..."
+            except (ValueError, OSError):
+                pass
+
+        table.add_row(date_str, r.get("source", ""), repo, summary)
+
     console.print(table)
+    console.print("[dim]查看完整日志: wkr show --date YYYY-MM-DD[/dim]")
 
 
 # ── wkr ingest ───────────────────────────────────────────
