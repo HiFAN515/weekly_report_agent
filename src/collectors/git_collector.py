@@ -269,7 +269,12 @@ class GitCollector:
                     deletions=0,
                 ))
         except git.exc.GitCommandError as e:
-            print(f"⚠️ Git 命令执行失败: {e}")
+            error_msg = str(e)
+            if "bad revision" in error_msg:
+                print(f"⚠️ 仓库 {repo.working_dir} 分支 '{branch}' 不存在，请检查配置")
+                print(f"   运行: wkr config --list-fields 查看当前配置")
+            else:
+                print(f"⚠️ Git 命令执行失败: {e}")
 
         return commits
 
