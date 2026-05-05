@@ -733,11 +733,29 @@ def config(show, set_key, add_repo_path, remove_repo_path, list_fields):
     config_path = find_config()
 
     if list_fields:
-        table = Table(title="可配置字段")
+        data = load_raw_config(config_path)
+
+        # 显示 repositories
+        repos = data.get("repositories", [])
+        if repos:
+            repo_table = Table(title="Git 仓库")
+            repo_table.add_column("#", style="dim")
+            repo_table.add_column("路径", style="cyan")
+            repo_table.add_column("别名", style="green")
+            repo_table.add_column("分支", style="magenta")
+            repo_table.add_column("Author", style="yellow")
+            for i, repo in enumerate(repos, 1):
+                alias = repo.get("alias") or Path(repo.get("path", "")).name or "—"
+                author = repo.get("author") or "（默认）"
+                repo_table.add_row(str(i), repo.get("path", ""), alias, repo.get("branch", "main"), author)
+            console.print(repo_table)
+            console.print("[dim]  添加: wkr config --add-repo PATH | 移除: wkr config --remove-repo PATH[/dim]\n")
+
+        # 显示简单字段
+        table = Table(title="配置字段")
         table.add_column("Key", style="cyan")
         table.add_column("说明", style="green")
         table.add_column("当前值", style="yellow")
-        data = load_raw_config(config_path)
         for key, desc in CONFIG_FIELDS.items():
             val = get_nested(data, key)
             table.add_row(key, desc, str(val) if val is not None else "—")
