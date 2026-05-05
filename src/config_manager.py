@@ -92,20 +92,40 @@ def add_repo(data: dict, path: str, branch: str = "main", alias: str = "", autho
     if "repositories" not in data:
         data["repositories"] = []
 
-    # 检查是否已存在（路径 + 分支 组合去重）
-    resolved = str(Path(path).expanduser().resolve())
-    for repo in data["repositories"]:
-        existing_resolved = str(Path(repo.get("path", "")).expanduser().resolve())
-        if existing_resolved == resolved and repo.get("branch") == branch:
-            return False, f"仓库已存在: {repo.get('path')} (分支: {branch})"
+    # 检查路径是否存在且是 Git 仓库
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.exists():
+        return False, f"路径不存在: {resolved}"
+    if not (resolved / ".git").exists():
+        return False, f"不是 Git 仓库（缺少 .git 目录）: {resolved}"
 
-    entry = {"path": path, "branch": branch}
+    # 检查分支是否存在
+    try:
+        import git
+        repo = git.Repo(str(resolved))
+        remote_branches = [b.name.replace("origin/", "") for b in repo.remote().refs]
+        local_branches = [b.name for b in repo.branches]
+        all_branches = set(remote_branches + local_branches)
+        if branch not in all_branches:
+            available = ", ".join(sorted(all_branches)[:10])
+            return False, f"分支 '{branch}' 不存在。可用分支: {available}"
+    except Exception:
+        pass  # 无法检查时跳过（允许后续采集时报错）
+
+    # 检查是否已存在（路径 + 分支 组合去重）
+    resolved_str = str(resolved)
+    for repo_entry in data["repositories"]:
+        existing_resolved = str(Path(repo_entry.get("path", "")).expanduser().resolve())
+        if existing_resolved == resolved_str and repo_entry.get("branch") == branch:
+            return False, f"仓库已存在: {repo_entry.get('path')} (分支: {branch})"
+
+    entry = {"path": str(resolved), "branch": branch}
     if alias:
         entry["alias"] = alias
     if author:
         entry["author"] = author
     data["repositories"].append(entry)
-    return True, f"已添加仓库: {path} (分支: {branch})"
+    return True, f"已添加仓库: {resolved} (分支: {branch})"
 
 
 def remove_repo(data: dict, path: str):
