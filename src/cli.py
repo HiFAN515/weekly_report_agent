@@ -132,13 +132,14 @@ def init():
     template = click.prompt("周报模板", default="standard",
                             type=click.Choice(["standard", "minimal", "project"]))
 
+    console.print("\n[dim]提示：选择的是 API 格式，其他厂商提供兼容 API 也可选对应格式（如 OpenAI 兼容选 openai）[/dim]")
     provider = click.prompt("LLM 提供商", default="openai",
                             type=click.Choice(["openai", "anthropic", "ollama"]))
     provider_name = provider
 
     if provider_name in ("openai", "anthropic"):
         console.print("\n[yellow]⚠️ 提醒：使用云端 LLM 时，您的工作日志数据将被传输至第三方服务器。[/yellow]")
-        console.print("[yellow]   对于敏感项目，建议选择本地 Ollama。[/yellow]\n")
+        console.print("[yellow]   对于敏感项目，建议选择本地模型。[/yellow]\n")
 
     model = click.prompt("模型名称",
                          default="claude-sonnet-4-20250514" if provider_name == "anthropic"
