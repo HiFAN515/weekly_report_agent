@@ -92,10 +92,12 @@ def add_repo(data: dict, path: str, branch: str = "main", alias: str = "", autho
     if "repositories" not in data:
         data["repositories"] = []
 
-    # 检查是否已存在
+    # 检查是否已存在（解析绝对路径比较）
+    resolved = str(Path(path).expanduser().resolve())
     for repo in data["repositories"]:
-        if repo.get("path") == path:
-            return False, f"仓库已存在: {path}"
+        existing_resolved = str(Path(repo.get("path", "")).expanduser().resolve())
+        if existing_resolved == resolved:
+            return False, f"仓库已存在: {repo.get('path')}"
 
     entry = {"path": path, "branch": branch}
     if alias:
