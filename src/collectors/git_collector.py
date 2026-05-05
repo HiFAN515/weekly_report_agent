@@ -35,6 +35,7 @@ class GitCommit:
     insertions: int             # 新增行数
     deletions: int              # 删除行数
     is_low_quality: bool = False  # 低信息量标记
+    repo_alias: str = ""        # 来源仓库别名
 
 
 @dataclass
@@ -154,9 +155,10 @@ class GitCollector:
 
         repo = git.Repo(repo_path)
         author = repo_config.author or global_author or self._get_default_author(repo)
+        alias = repo_config.alias or repo_path.name
 
         # 获取 commit 列表
-        commits = self._get_commits(repo, since, until, author, repo_config.branch)
+        commits = self._get_commits(repo, since, until, author, repo_config.branch, alias)
 
         # 获取每个 commit 的 diff stats（带缓存）
         for c in commits:
@@ -227,7 +229,7 @@ class GitCollector:
             return ""
 
     def _get_commits(self, repo: git.Repo, since: date, until: date,
-                     author: str, branch: str) -> list[GitCommit]:
+                     author: str, branch: str, repo_alias: str = "") -> list[GitCommit]:
         """读取 commit 列表"""
         since_dt = datetime(since.year, since.month, since.day, tzinfo=self.tz)
         until_dt = datetime(until.year, until.month, until.day, 23, 59, 59, tzinfo=self.tz)
@@ -267,6 +269,7 @@ class GitCollector:
                     files_changed=[],  # 后续填充
                     insertions=0,
                     deletions=0,
+                    repo_alias=repo_alias,
                 ))
         except git.exc.GitCommandError as e:
             error_msg = str(e)

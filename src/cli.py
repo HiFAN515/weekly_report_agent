@@ -222,10 +222,14 @@ def log(from_git, manual, filepath, target_date):
 
         for day in days:
             log_store.save_git_day(day, cfg.security.level)
-            console.print(f"[green]✓ 已采集 {day.date} Git 提交 {len(day.commits)} 条（{day.repo_alias}）[/green]")
+            # 显示涉及的所有仓库
+            repos_in_day = set(c.repo_alias for c in day.commits if c.repo_alias)
+            repo_names = ", ".join(sorted(repos_in_day)) if repos_in_day else day.repo_alias
+            console.print(f"[green]✓ 已采集 {day.date} Git 提交 {len(day.commits)} 条（{repo_names}）[/green]")
             for c in day.commits:
                 prefix = "[低信息量] " if c.is_low_quality else ""
-                console.print(f"  - {c.hash} {prefix}{c.message.split(chr(10))[0][:60]}")
+                repo_tag = f"[{c.repo_alias}] " if c.repo_alias else ""
+                console.print(f"  - {c.hash} {repo_tag}{prefix}{c.message.split(chr(10))[0][:60]}")
 
         # 询问是否补充
         if click.confirm("是否补充说明？", default=False):
