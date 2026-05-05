@@ -11,3 +11,5 @@ data/logs/
 data/reports/
 .env
 config.yaml
+AGENTS.md
+./hermes
